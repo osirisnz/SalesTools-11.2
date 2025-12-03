@@ -4,6 +4,10 @@ local StdUi = LibStub("StdUi")
 local SalesTools = LibStub("AceAddon-3.0"):GetAddon("SalesTools")
 local TradeLog = SalesTools:NewModule("TradeLog", "AceEvent-3.0", "AceHook-3.0", "AceConsole-3.0")
 
+-- CRITICAL FIX: The following two lines were causing the race condition error
+-- L["TradeLog_Window_Title"] = L["TradeLog_Window_Title"] or "Trade Log Viewer" -- REMOVED
+-- L["CollectorMenu_MassWhisper_Button"] = L["CollectorMenu_VersionInfo_Button_Text"] or "Version Info" -- REMOVED
+
 function TradeLog:OnEnable()
     -- Run when the module is enabled
     SalesTools:Debug("TradeLog:OnEnable")
@@ -93,13 +97,13 @@ function TradeLog:OnEvent(event, arg1, arg2, ...)
     if (event == "UI_ERROR_MESSAGE") then
         -- Special error cases
         if (arg2 == ERR_TRADE_BAG_FULL or arg2 == ERR_TRADE_MAX_COUNT_EXCEEDED or arg2 == ERR_TRADE_TARGET_BAG_FULL or arg2 == ERR_TRADE_TARGET_MAX_COUNT_EXCEEDED) then
-            SalesTools:Print(string.format(L["TradeLog_Trade_Cancelled"], (TradeLog and TradeLog.TradeTargetName) or self.TradeTargetName or "Unknown", tostring(arg2 or ERR_TRADE_CANCELLED or "Cancelled")))
+            SalesTools:Print(string.format(L["TradeLog_Trade_Cancelled"], (TradeLog and TradeLog.TradeTargetName) or self.TradeTargetName or L["TradeLog_Target_Unknown"], tostring(arg2 or L["TradeLog_Status_Cancelled"] or "Cancelled")))
             TradeLog:Finish()
         end
     elseif (event == "UI_INFO_MESSAGE" and (arg2 == ERR_TRADE_CANCELLED or arg2 == ERR_TRADE_COMPLETE)) then
         -- Cancelled or success
         if (arg2 == ERR_TRADE_CANCELLED and self.TradeTargetName) then
-            SalesTools:Print(string.format(L["TradeLog_Trade_Cancelled"], (TradeLog and TradeLog.TradeTargetName) or self.TradeTargetName or "Unknown", tostring(arg2 or ERR_TRADE_CANCELLED or "Cancelled")))
+            SalesTools:Print(string.format(L["TradeLog_Trade_Cancelled"], (TradeLog and TradeLog.TradeTargetName) or self.TradeTargetName or L["TradeLog_Target_Unknown"], tostring(arg2 or L["TradeLog_Status_Cancelled"] or "Cancelled")))
             TradeLog:Finish()
         else
             SalesTools:Print(string.format(L["TradeLog_Trade_Completed"], TradeLog.TradeTargetName))
@@ -157,7 +161,7 @@ function TradeLog:PrintTradeContents()
 
     if (self.PendingTradeContents) then
         if (self.PendingTradeContents.playerGold or self.PendingTradeContents.playerItems) then
-            print("|CFFFFFF00 Gave:")
+            print("|CFFFFFF00 " .. L["TradeLog_Print_Gave"])
             if (self.PendingTradeContents.playerGold and self.PendingTradeContents.playerGold > 0) then
                 print("    |CFFFFFF00" .. SalesTools:FormatRawCurrency(self.PendingTradeContents.playerGold) .. "g")
             end
@@ -168,7 +172,7 @@ function TradeLog:PrintTradeContents()
         end
 
         if (self.PendingTradeContents.targetGold or self.PendingTradeContents.targetItems) then
-            print("|CFFFFFF00 Received:")
+            print("|CFFFFFF00 " .. L["TradeLog_Print_Received"])
             if (self.PendingTradeContents.targetGold and self.PendingTradeContents.targetGold > 0) then
                 print("    |CFFFFFF00" .. SalesTools:FormatRawCurrency(self.PendingTradeContents.targetGold) .. "g")
             end
@@ -234,21 +238,23 @@ function TradeLog:DrawWindow()
     SalesTools:Debug("TradeLog:DrawWindow")
 
     local LogFrame
-    if (self.CharacterSettings.LogFrameSize ~= nil) then
-        LogFrame = StdUi:Window(UIParent, self.CharacterSettings.LogFrameSize.width, self.CharacterSettings.LogFrameSize.height, "Trade Log Viewer")
-    else
-        LogFrame = StdUi:Window(UIParent, 1100, 700, "Trade Log Viewer")
-    end
+    -- Define the desired permanent maximized dimensions and position
+    local defaultWidth = 1400
+    local defaultHeight = 720
+    local defaultPosition = { point = "CENTER", relPoint = "CENTER", relX = 0, relY = 0 }
 
-    if (self.CharacterSettings.LogFramePosition ~= nil) then
-        LogFrame:SetPoint(self.CharacterSettings.LogFramePosition.point or "CENTER",
+    -- CRITICAL FIX: Overwrite any saved custom size/position settings to force the default.
+    self.CharacterSettings.LogFrameSize = { width = defaultWidth, height = defaultHeight }
+    self.CharacterSettings.LogFramePosition = defaultPosition
+
+    -- Now create the window using the forced settings
+    LogFrame = StdUi:Window(UIParent, self.CharacterSettings.LogFrameSize.width, self.CharacterSettings.LogFrameSize.height, L["TradeLog_Window_Title"])
+    
+    LogFrame:SetPoint(self.CharacterSettings.LogFramePosition.point,
                 self.CharacterSettings.LogFramePosition.UIParent,
-                self.CharacterSettings.LogFramePosition.relPoint or "CENTER",
-                self.CharacterSettings.LogFramePosition.relX or 0,
-                self.CharacterSettings.LogFramePosition.relY or 0)
-    else
-        LogFrame:SetPoint('CENTER', UIParent, 'CENTER', 0, 0)
-    end
+                self.CharacterSettings.LogFramePosition.relPoint,
+                self.CharacterSettings.LogFramePosition.relX,
+                self.CharacterSettings.LogFramePosition.relY)
 
     LogFrame:SetScript("OnSizeChanged", function(self)
         TradeLog.CharacterSettings.LogFrameSize = { width = self:GetWidth(), height = self:GetHeight() }
@@ -266,7 +272,9 @@ function TradeLog:DrawWindow()
 
     StdUi:MakeResizable(LogFrame, "BOTTOMRIGHT")
     StdUi:MakeResizable(LogFrame, "TOPLEFT")
-    LogFrame:SetResizeBounds(850, 250, 1280, 720)
+    -- MODIFIED: Max width set to 1400, Max height set to 720
+    -- SetResizeBounds( MinWidth, MinHeight, MaxWidth, MaxHeight )
+    LogFrame:SetResizeBounds(850, 250, 1400, 720)
     LogFrame:SetFrameLevel(SalesTools:GetNextFrameLevel())
 
     local IconFrame = StdUi:Frame(LogFrame, 32, 32)
@@ -337,14 +345,14 @@ function TradeLog:DrawClearWarningWindow()
 
     local buttons = {
         character = {
-            text = "This Character",
+            text = L["TradeLog_Clear_Char"],
             onClick = function(b)
                 TradeLog:ClearTradesForCharacter()
                 b.window:Hide()
             end
         },
         all = {
-            text = "All Trades",
+            text = L["TradeLog_Clear_All"],
             onClick = function(b)
                 TradeLog:ClearAllTrades()
                 b.window:Hide()
@@ -352,7 +360,7 @@ function TradeLog:DrawClearWarningWindow()
         },
     }
 
-    StdUi:Confirm("Clear Log", L["TradeLog_Clear_Warning"], buttons, 1)
+    StdUi:Confirm(L["TradeLog_Clear_Button"], L["TradeLog_Clear_Warning"], buttons, 1)
 end
 
 

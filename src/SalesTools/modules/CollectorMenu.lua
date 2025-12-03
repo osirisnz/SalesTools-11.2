@@ -1,5 +1,6 @@
 -- Basic imports(s)/setup
 local L = LibStub("AceLocale-3.0"):GetLocale("SalesTools") -- Localization support
+
 local SalesTools = LibStub("AceAddon-3.0"):GetAddon("SalesTools")
 local CollectorMenu = SalesTools:NewModule("CollectorMenu", "AceEvent-3.0", "AceHook-3.0", "AceConsole-3.0")
 local StdUi = LibStub("StdUi")
@@ -98,11 +99,16 @@ function CollectorMenu:UpdateGold(event, ...)
     -- Event for PLAYER_MONEY
     -- Update the gold display
     SalesTools:Debug("CollectorMenu:UpdateGold")
+    
+    local currentGold = SalesTools:CommaValue(math.floor(GetMoney() / 100 / 100))
+    local capRequired = SalesTools:CommaValue(9999999 - math.floor(GetMoney() / 100 / 100))
 
     -- If our menu exists update the relevant texts
     if (self.CollectorMenuFrame ~= nil) then
-        self.CollectorMenuFrame.GoldLabel:SetText('Gold: ' .. SalesTools:CommaValue(math.floor(GetMoney() / 100 / 100)) .. 'g')
-        self.CollectorMenuFrame.GoldCapLabel:SetText('Cap Req: ' .. SalesTools:CommaValue(9999999 - math.floor(GetMoney() / 100 / 100)) .. 'g')
+        -- MODIFIED: Use localized format string for Gold label
+        self.CollectorMenuFrame.GoldLabel:SetText(string.format(L["CollectorMenu_Gold_Label"], currentGold .. 'g'))
+        -- MODIFIED: Use localized format string for Cap Req label
+        self.CollectorMenuFrame.GoldCapLabel:SetText(string.format(L["CollectorMenu_Cap_Req_Label"], capRequired .. 'g'))
     end
 end
 
@@ -116,6 +122,9 @@ end
 function CollectorMenu:DrawCollectorWindow()
     -- Draw our GC Menu/Collectors Window
     SalesTools:Debug("CollectorMenu:DrawCollectorWindow")
+
+    -- LOCAL FIX: Ensure L["TradeLog_Window_Title"] exists before TradeLog.lua tries to use it.
+    L["TradeLog_Window_Title"] = L["TradeLog_Window_Title"] or "Trade Log Viewer" 
 
     if self.CollectorMenuFrame == nil then
         local frame = StdUi:Window(UIParent, 260, 250, L["CollectorMenu"])
@@ -149,19 +158,16 @@ if frame.TradeLog == nil then
     end)
 end
 
--- Mass Inviter Button
-if frame.MassInvite == nil then
-    local MassInviteButton = StdUi:Button(frame, 124, 30, L["CollectorMenu_MassInvite_Button"])
-    StdUi:GlueTop(MassInviteButton, frame.TradeLog, 0, -30, 'CENTER')
-    frame.MassInvite = MassInviteButton
-    frame.MassInvite:SetScript("OnClick", function()
-        if ChatFrame1EditBox then
-            ChatFrame1EditBox:SetText("/sales help")
-            ChatEdit_SendText(ChatFrame1EditBox, 0)
-        end
+-- Info Panel Button (Replaces Mass Invite Button)
+if frame.InfoPanelButton == nil then
+    local InfoPanelButton = StdUi:Button(frame, 124, 30, L["CollectorMenu_InfoPanel_Button"])
+    StdUi:GlueTop(InfoPanelButton, frame.TradeLog, 0, -30, 'CENTER')
+    frame.InfoPanelButton = InfoPanelButton
+    frame.InfoPanelButton:SetScript("OnClick", function()
+        -- Changed to execute /sales help command
+        SalesTools:ToggleHelpPanel()
     end)
 end
-
 
 
     
@@ -204,24 +210,24 @@ end
 
         end
 
-        -- Invite Request Button
+        -- Invite Request Button (Used as Close Menu button in the provided context)
         if frame.RequestInviteButton == nil then
-            local RequestInviteButton = StdUi:Button(frame, 124, 30, L["CollectorMenu_Invite_Request_Button"])
+            local RequestInviteButton = StdUi:Button(frame, 124, 30, L["CollectorMenu_CloseMenu_Button"])
             StdUi:GlueTop(RequestInviteButton, frame.GoldLabelLog, 0, -30, 'CENTER')
             frame.RequestInviteButton = RequestInviteButton
             frame.RequestInviteButton:SetScript("OnClick", function()
                 -- Show a tip in chat on how to re-open the Collector Menu
-if SalesTools and SalesTools.Print then
-    SalesTools:Print("to open Collector Menu type |cffffff00/sales collect|r")
-else
-    print("|cff33ff99[SalesTools]|r to open Collector Menu type |cffffff00/sales collect|r")
-end
--- Run the existing toggle via slash command
-if ChatFrame1EditBox then
-    ChatFrame1EditBox:SetText("/sales collect")
-    ChatEdit_SendText(ChatFrame1EditBox, 0)
-end
-end)
+                if SalesTools and SalesTools.Print then
+                    SalesTools:Print(L["CollectorMenu_Reopen_Message"] .. " |cffffff00/sales collect|r")
+                else
+                    print("|cff33ff99[SalesTools]|r " .. L["CollectorMenu_Reopen_Message"] .. " |cffffff00/sales collect|r")
+                end
+                -- Run the existing toggle via slash command
+                if ChatFrame1EditBox then
+                    ChatFrame1EditBox:SetText("/sales collect")
+                    ChatEdit_SendText(ChatFrame1EditBox, 0)
+                end
+            end)
         end
 
 
@@ -229,7 +235,7 @@ end)
         -- Mass Whisper Button
         if frame.MassWhisperButton == nil then
             local MassWhisperButton = StdUi:Button(frame, 124, 30, L["CollectorMenu_MassWhisper_Button"])
-            StdUi:GlueTop(MassWhisperButton, frame.MassInvite, 0, -30, 'CENTER')
+            StdUi:GlueTop(MassWhisperButton, frame.InfoPanelButton, 0, -30, 'CENTER')
             frame.MassWhisperButton = MassWhisperButton
             frame.MassWhisperButton:SetScript("OnClick", function()
                 SalesTools:ToggleInfoPanel()
@@ -238,30 +244,33 @@ end)
     
     
         -- Gold Section
-        local goldText = StdUi:Label(frame, "Gold Info", 16)
+        local goldText = StdUi:Label(frame, L["CollectorMenu_Gold_Info_Title"], 16)
         StdUi:GlueTop(goldText, frame.RequestInviteButton, -63, -40, 'CENTER')
     
+        local currentGold = SalesTools:CommaValue(math.floor(GetMoney() / 100 / 100))
+        local capRequired = SalesTools:CommaValue(9999999 - math.floor(GetMoney() / 100 / 100))
+
         -- Label for how much gold the player has
         if frame.GoldLabel == nil then
-            local gold = math.floor(GetMoney() / 100 / 100)
-            local GoldCopyButton = StdUi:Button(frame, 250, 30, 'Gold: ' .. SalesTools:CommaValue(gold) .. 'g')
+            -- MODIFIED: Use localized format string for Gold label
+            local GoldCopyButton = StdUi:Button(frame, 250, 30, string.format(L["CollectorMenu_Gold_Label"], currentGold .. 'g'))
             StdUi:GlueTop(GoldCopyButton, goldText, 0, -20, 'CENTER')
             frame.GoldLabel = GoldCopyButton
             frame.GoldLabel:SetScript("OnClick", function()
                 local gold = math.floor(GetMoney() / 100 / 100)
-                SalesTools:Copy(gold, "Copy Gold")
+                SalesTools:Copy(gold, L["CollectorMenu_Copy_Gold_Title"]) -- <--- MODIFIED to use new localized key
             end)
         end
     
         -- Label for the amount of gold needed to cap a character at 9,999,999
         if frame.GoldCapLabel == nil then
-            local gold = 9999999 - math.floor(GetMoney() / 100 / 100)
-            local goldCapButton = StdUi:Button(frame, 250, 30, 'Cap Req: ' .. SalesTools:CommaValue(gold) .. 'g')
+            -- MODIFIED: Use localized format string for Cap Req label
+            local goldCapButton = StdUi:Button(frame, 250, 30, string.format(L["CollectorMenu_Cap_Req_Label"], capRequired .. 'g'))
             StdUi:GlueTop(goldCapButton, frame.GoldLabel, 0, -30, 'CENTER')
             frame.GoldCapLabel = goldCapButton
             frame.GoldCapLabel:SetScript("OnClick", function()
                 local gold = 9999999 - math.floor(GetMoney() / 100 / 100)
-                SalesTools:Copy(gold, "Copy Gold")
+                SalesTools:Copy(gold, L["CollectorMenu_Copy_Cap_Title"]) -- <--- MODIFIED to use new localized key
             end)
         end
 

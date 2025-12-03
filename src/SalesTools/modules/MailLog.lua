@@ -100,21 +100,24 @@ function MailLog:DrawWindow()
     SalesTools:Debug("MailLog:DrawWindow")
 
     local LogFrame
-    if (self.CharacterSettings.LogFrameSize ~= nil) then
-        LogFrame = StdUi:Window(UIParent, self.CharacterSettings.LogFrameSize.width, self.CharacterSettings.LogFrameSize.height, L["MailLog_Window_Title"])
-    else
-        LogFrame = StdUi:Window(UIParent, 1100, 700, L["MailLog_Window_Title"])
-    end
+    -- Define the desired permanent maximized dimensions and position
+    local defaultWidth = 1400
+    local defaultHeight = 720
+    local defaultPosition = { point = "CENTER", relPoint = "CENTER", relX = 0, relY = 0 }
 
-    if (self.CharacterSettings.LogFramePosition ~= nil) then
-        LogFrame:SetPoint(self.CharacterSettings.LogFramePosition.point or "CENTER",
+    -- CRITICAL FIX: Overwrite any saved custom size/position settings to force the default.
+    self.CharacterSettings.LogFrameSize = { width = defaultWidth, height = defaultHeight }
+    self.CharacterSettings.LogFramePosition = defaultPosition
+
+    -- Now create the window using the forced settings
+    LogFrame = StdUi:Window(UIParent, self.CharacterSettings.LogFrameSize.width, self.CharacterSettings.LogFrameSize.height, L["MailLog_Window_Title"])
+    
+    LogFrame:SetPoint(self.CharacterSettings.LogFramePosition.point,
                 self.CharacterSettings.LogFramePosition.UIParent,
-                self.CharacterSettings.LogFramePosition.relPoint or "CENTER",
-                self.CharacterSettings.LogFramePosition.relX or 0,
-                self.CharacterSettings.LogFramePosition.relY or 0)
-    else
-        LogFrame:SetPoint('CENTER', UIParent, 'CENTER', 0, 0)
-    end
+                self.CharacterSettings.LogFramePosition.relPoint,
+                self.CharacterSettings.LogFramePosition.relX,
+                self.CharacterSettings.LogFramePosition.relY)
+
 
     LogFrame:SetScript("OnSizeChanged", function(self)
         MailLog.CharacterSettings.LogFrameSize = { width = self:GetWidth(), height = self:GetHeight() }
@@ -128,12 +131,16 @@ function MailLog:DrawWindow()
 
     StdUi:MakeResizable(LogFrame, "BOTTOMRIGHT")
     StdUi:MakeResizable(LogFrame, "TOPLEFT")
-    LogFrame:SetResizeBounds(850, 250,1280, 720)
+    -- Max bounds set to 1400x720 (maximized size)
+    LogFrame:SetResizeBounds(850, 250, 1400, 720)
     LogFrame:SetFrameLevel(SalesTools:GetNextFrameLevel())
 
     LogFrame:SetScript("OnMouseDown", function(self)
         self:SetFrameLevel(SalesTools:GetNextFrameLevel())
     end)
+    
+    -- All button code remains removed.
+    
 
     local IconFrame = StdUi:Frame(LogFrame, 32, 32)
     local IconTexture = StdUi:Texture(IconFrame, 32, 32, SalesTools.AddonIcon)
@@ -190,7 +197,6 @@ function MailLog:DrawWindow()
 			 	
 
     self.LogFrame = LogFrame
-
     
 end
 
@@ -205,7 +211,7 @@ function MailLog:DrawReportWindow()
 
     StdUi:MakeResizable(MailAuditFrame, "BOTTOMRIGHT")
 
-    MailAuditFrame:SetResizeBounds(600, 800, 960, 1280)
+    MailAuditFrame:SetResizeBounds(600, 800, 960, 1400)
     MailAuditFrame:SetFrameLevel(SalesTools:GetNextFrameLevel())
 
     MailAuditFrame:SetScript("OnMouseDown", function(self)

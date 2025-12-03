@@ -5,7 +5,10 @@ local BalanceList = SalesTools:NewModule("BalanceList", "AceConsole-3.0", "AceEv
 local StdUi = LibStub('StdUi')
 local LGBC = LibStub("LibGuildBankComm-1.0")
 
-
+-- Define the strings required for the combined display
+local WARBAND_BALANCE_STRING = L["BalanceList_Viewer_Warband_Balance"] .. ": %s" 
+local ACCOUNT_BALANCE_STRING_FORMAT = L["BalanceList_AccountBalance_Format"] -- New key to fix the format error
+local NO_ACCESS_TEXT = "No Warband Access" 
 
 function BalanceList:OnEnable()
     -- Run when the module is enabled
@@ -42,6 +45,9 @@ function BalanceList:OnEnable()
     BalanceList:RegisterEvent("GUILDBANKFRAME_CLOSED", "UpdateGold")
     BalanceList:RegisterEvent("GUILDBANKFRAME_OPENED", "UpdateGold")
     BalanceList:RegisterEvent("GUILDBANK_UPDATE_MONEY", "UpdateGold")
+    BalanceList:RegisterEvent("ACCOUNT_MONEY", "UpdateWarbandGold")
+    -- FIX: Register for GUILD_ROSTER_UPDATE to ensure guild name is retrieved correctly on login
+    BalanceList:RegisterEvent("GUILD_ROSTER_UPDATE", "UpdateGold") 
     self:UpdateGold()
 
 end
@@ -70,10 +76,23 @@ function BalanceList:SearchEntries(filter)
     local SearchFilter = filter:lower()
     local FilteredResults = {}
 
-    for _, CharBalanceInfo in pairs(self.GlobalSettings.BalanceList) do
-        if (_ and _:lower():find(SearchFilter, 1, true)) then
+    for playerName, CharBalanceInfo in pairs(self.GlobalSettings.BalanceList) do
+        -- FIX: Ensure 'lastupdated' is always a number (default to 0 for old data)
+        local lastUpdated = CharBalanceInfo["LastUpdated"] or 0
+        
+        if (playerName and playerName:lower():find(SearchFilter, 1, true)) then
             --if (SalesTools:FormatRawCurrency(CharBalanceInfo["Personal"]) >= 1 or SalesTools:FormatRawCurrency(CharBalanceInfo["Guild"]) >= 1) then
-                table.insert(FilteredResults, { name = _, realm = string.match(_, "-(.*)"), balance = CharBalanceInfo["Personal"], guildname = CharBalanceInfo["GuildName"], guildmoney = CharBalanceInfo["Guild"], deleteTexture = [=[Interface\Buttons\UI-GroupLoot-Pass-Down]=] })
+                table.insert(FilteredResults, { 
+                    name = playerName, 
+                    realm = CharBalanceInfo["Realm"], 
+                    balance = CharBalanceInfo["Personal"], 
+                    guildname = CharBalanceInfo["GuildName"], 
+                    guildmoney = CharBalanceInfo["Guild"], 
+                    lastupdated = lastUpdated, -- Use the guaranteed number
+                    display_lastupdated = BalanceList:FormatRelativeTime(lastUpdated), -- NEW: Pre-formatted date string
+                    -- Removed warbandmoney field as it's now displayed globally
+                    deleteTexture = [=[Interface\Buttons\UI-GroupLoot-Pass-Down]=] 
+                })
 
             --end
 
@@ -95,22 +114,24 @@ function BalanceList:DrawWindow()
     SalesTools:Debug("BalanceList:DrawWindow")
 
     local BalanceFrame
+    -- Define the desired permanent maximized dimensions and position
+    local defaultWidth = 1400
+    local defaultHeight = 720
+    local defaultPosition = { point = "CENTER", relPoint = "CENTER", relX = 0, relY = 0 }
 
-    if (self.CharacterSettings.BalanceFrameSize ~= nil) then
-        BalanceFrame = StdUi:Window(UIParent, self.CharacterSettings.BalanceFrameSize.width, self.CharacterSettings.BalanceFrameSize.height, L["BalanceList_Window_Title"])
-    else
-        BalanceFrame = StdUi:Window(UIParent, 850, 650, L["BalanceList_Window_Title"])
-    end
+    -- CRITICAL FIX: Overwrite any saved custom size/position settings to force the default.
+    self.CharacterSettings.BalanceFrameSize = { width = defaultWidth, height = defaultHeight }
+    self.CharacterSettings.BalanceFramePosition = defaultPosition
 
-    if (self.CharacterSettings.BalanceFramePosition ~= nil) then
-        BalanceFrame:SetPoint(self.CharacterSettings.BalanceFramePosition.point or "CENTER",
+    -- Now create the window using the forced settings
+    BalanceFrame = StdUi:Window(UIParent, self.CharacterSettings.BalanceFrameSize.width, self.CharacterSettings.BalanceFrameSize.height, L["BalanceList_Window_Title"])
+    
+    BalanceFrame:SetPoint(self.CharacterSettings.BalanceFramePosition.point,
                 self.CharacterSettings.BalanceFramePosition.UIParent,
-                self.CharacterSettings.BalanceFramePosition.relPoint or "CENTER",
-                self.CharacterSettings.BalanceFramePosition.relX or 0,
-                self.CharacterSettings.BalanceFramePosition.relY or 0)
-    else
-        BalanceFrame:SetPoint('CENTER', UIParent, 'CENTER', 0, 0)
-    end
+                self.CharacterSettings.BalanceFramePosition.relPoint,
+                self.CharacterSettings.BalanceFramePosition.relX,
+                self.CharacterSettings.BalanceFramePosition.relY)
+    
 
     BalanceFrame:SetScript("OnSizeChanged", function(self)
         BalanceList.CharacterSettings.BalanceFrameSize = { width = self:GetWidth(), height = self:GetHeight() } -- Save width/height to config db
@@ -131,7 +152,8 @@ function BalanceList:DrawWindow()
     StdUi:MakeResizable(BalanceFrame, "BOTTOMRIGHT")
     StdUi:MakeResizable(BalanceFrame, "TOPLEFT")
 
-    BalanceFrame:SetResizeBounds(850, 250, 1280, 720)
+    -- MODIFIED: Max width set to 1400. SetResizeBounds( MinWidth, MinHeight, MaxWidth, MaxHeight )
+    BalanceFrame:SetResizeBounds(850, 250, 1400, 720)
     BalanceFrame:SetFrameLevel(SalesTools:GetNextFrameLevel())
 
     local IconFrame = StdUi:Frame(BalanceFrame, 32, 32)
@@ -154,10 +176,10 @@ function BalanceList:DrawWindow()
         local BalanceAuditString = ""
         local AccountBalance = 0
 
-        for _, CharBalanceInfo in pairs(self.GlobalSettings.BalanceList) do
+        for playerName, CharBalanceInfo in pairs(self.GlobalSettings.BalanceList) do
             --if (SalesTools:FormatRawCurrency(CharBalanceInfo["Personal"]) >= 1 or SalesTools:FormatRawCurrency(CharBalanceInfo["Guild"]) >= 1) then
 
-                BalanceAuditString = BalanceAuditString .. _ .. string.char(9) .. CharBalanceInfo["Realm"] .. string.char(9) .. CharBalanceInfo["Faction"] .. string.char(9) .. SalesTools:FormatRawCurrency(CharBalanceInfo["Personal"])  .. string.char(9) .. CharBalanceInfo["GuildName"] .. string.char(9) .. SalesTools:FormatRawCurrency(CharBalanceInfo["Guild"]).. string.char(10)
+                BalanceAuditString = BalanceAuditString .. playerName .. string.char(9) .. CharBalanceInfo["Realm"] .. string.char(9) .. CharBalanceInfo["Faction"] .. string.char(9) .. SalesTools:FormatRawCurrency(CharBalanceInfo["Personal"])  .. string.char(9) .. CharBalanceInfo["GuildName"] .. string.char(9) .. SalesTools:FormatRawCurrency(CharBalanceInfo["Guild"]).. string.char(10)
     
             --end
     
@@ -173,7 +195,7 @@ end
 
 function BalanceList:DrawReportWindow()
     -- Draw a window with an edit box for our gold audit
-    SalesTools:Debug("BalanceList:DrawReportWindow")
+    SalesTools:Debug("BalanceList:DrawReportReportWindow")
 
 
 
@@ -221,23 +243,61 @@ function BalanceList:DrawSearchPane()
 
     local Search_Button = StdUi:Button(BalanceFrame, 80, 30, L["BalanceList_Search_Button"] )
 
+    -- Calculate current total balance for initial display
     local AccountBalance = 0
+    local WarbandBalance = BalanceList:GetWarbandMoney()
+    
     for _, CharBalanceInfo in pairs(self.GlobalSettings.BalanceList) do
-        --if (SalesTools:FormatRawCurrency(CharBalanceInfo["Personal"]) >= 1) then
-            AccountBalance = AccountBalance + CharBalanceInfo["Personal"]
-
-        --end
-
-
+        AccountBalance = AccountBalance + CharBalanceInfo["Personal"]
     end
-
-    AccountBalance = BalanceList:MoneyFormat(AccountBalance)
-
-    local GoldLabel = StdUi:Label(BalanceFrame, string.format(L["BalanceList_AccountBalance"],string.char(10),AccountBalance), 14, nil, 200, 30)
+    
+    local formattedTotalCombined
+    local formattedWarbandBalance
+    
+    local TotalBalanceCombined = AccountBalance
+    
+    -- Check if WarbandBalance is a number (meaning access was granted)
+    if type(WarbandBalance) == 'number' then
+        -- Calculate Total Account Balance (Character Sum + Warband)
+        TotalBalanceCombined = AccountBalance + WarbandBalance
+        
+        -- Format the balances
+        formattedWarbandBalance = BalanceList:MoneyFormat(WarbandBalance)
+        
+        -- Format the combined balance
+        formattedTotalCombined = BalanceList:MoneyFormat(TotalBalanceCombined)
+        
+        -- COMBINE GOLD BALANCE AND WARBAND GOLD INTO A SINGLE LABEL
+        combinedText = string.format(
+            ACCOUNT_BALANCE_STRING_FORMAT .. string.char(10) .. WARBAND_BALANCE_STRING,
+            formattedTotalCombined,
+            formattedWarbandBalance
+        )
+    else
+        -- WarbandBalance is "No Access", do not add it to total
+        
+        -- Format the character sum balance
+        formattedTotalCombined = BalanceList:MoneyFormat(AccountBalance)
+        
+        -- Display No Access for Warband
+        combinedText = string.format(
+            ACCOUNT_BALANCE_STRING_FORMAT .. string.char(10) .. WARBAND_BALANCE_STRING,
+            formattedTotalCombined,
+            NO_ACCESS_TEXT
+        )
+    end
+    
+    -- MODIFIED: Increased label width to 350 for max gold, adjusted height to 40.
+    local GoldLabel = StdUi:Label(BalanceFrame, combinedText, 14, nil, 350, 40) 
+    
+    -- MODIFIED: Right align the text within the label
+    GoldLabel:SetJustifyH("RIGHT") 
 
     StdUi:GlueTop(SearchBox, BalanceFrame, 10, -40, "LEFT")
     StdUi:GlueTop(Search_Button, BalanceFrame, 420, -40, "LEFT")
-    StdUi:GlueTop(GoldLabel, BalanceFrame, -20, -40, "RIGHT")
+    
+    -- MODIFIED: Adjusted position to glue near the right edge of the frame with 10px padding (-10)
+    StdUi:GlueTop(GoldLabel, BalanceFrame, -10, -40, "RIGHT") 
 
     SearchBox:SetScript("OnEnterPressed", function()
         BalanceList:SearchEntries(SearchBox:GetText())
@@ -253,12 +313,47 @@ function BalanceList:DrawSearchPane()
 
 end
 
+-- MODIFIED MODULE FUNCTION: Format timestamp into relative time ("x days ago", "x hours ago", etc.)
+function BalanceList:FormatRelativeTime(timestamp)
+    SalesTools:Debug("BalanceList:FormatRelativeTime", timestamp)
+    if not timestamp or type(timestamp) ~= 'number' or timestamp == 0 then return "" end -- ADDED TYPE CHECK AND ZERO CHECK
+
+    local diff = time() - timestamp
+    
+    -- Check if it's less than 1 minute (less than 60 seconds)
+    if diff < 60 then
+        return L["BalanceList_Time_JustNow"]
+    end
+
+    -- Check if it's less than 1 hour (3600 seconds)
+    if diff < 3600 then
+        local minutes = math.max(1, math.floor(diff / 60))
+        return format(L["BalanceList_Time_MinAgo"], minutes)
+    end
+    
+    -- Check if it's less than 24 hours (86400 seconds)
+    if diff < 86400 then
+        local hours = math.floor(diff / 3600)
+        return format(L["BalanceList_Time_HoursAgo"], hours)
+    end
+    
+    -- Check if it's less than 30 days (2592000 seconds)
+    if diff < 2592000 then
+        local days = math.floor(diff / 86400)
+        return format(L["BalanceList_Time_DaysAgo"], days)
+    end
+    
+    -- Fallback to the date format for older entries
+    return date("%d/%m/%Y", timestamp)
+end
+
+
 function BalanceList:DrawSearchResultsTable()
     -- Draw the search results table
     SalesTools:Debug("BalanceList:DrawSearchResultsTable")
 
     local BalanceFrame = self.BalanceFrame
-
+    
     local cols = {
         {
             name = L["BalanceList_Viewer_Character"],
@@ -298,6 +393,16 @@ function BalanceList:DrawSearchResultsTable()
             index = "guildmoney",
             format = "money",
         },
+        -- MODIFIED COLUMN: Set defaultSort to "desc" (newest at top)
+        {
+            name = L["BalanceList_Viewer_LastUpdated"], -- Localized header
+            width = 140,
+            align = "CENTER",
+            index = "display_lastupdated", -- Use the pre-formatted string
+            format = "string",
+            defaultSort = "desc", -- Set default sort to descending
+            -- Removed custom 'func' as data is now pre-processed in SearchEntries
+        },
         {
             name = "",
             width = 16,
@@ -307,9 +412,10 @@ function BalanceList:DrawSearchResultsTable()
             texture = true,
             events = {
                 OnClick = function(rowFrame, cellFrame, data, cols, row, realRow, column, table, button, ...)
-                    self.GlobalSettings.BalanceList[cols.name] = nil
+                    -- Use the stored PlayerName key to delete the data
+                    local nameKey = data.name; 
+                    self.GlobalSettings.BalanceList[nameKey] = nil
                     BalanceList:RefreshData()
-
                 end,
             },
         },
@@ -355,8 +461,12 @@ function BalanceList:ApplyDefaultSort(tableToSort)
         end
 
         if (not isSorted) then
+            -- Default sort changed to LastUpdated, descending (newest at top)
+            -- FIX: Safely compare, defaulting missing "lastupdated" to 0.
             return table.sort(tableToSort, function(a, b)
-                return a["balance"] > b["balance"]
+                local a_time = a["lastupdated"] or 0
+                local b_time = b["lastupdated"] or 0
+                return a_time > b_time
             end)
         end
     end
@@ -393,24 +503,81 @@ function BalanceList:RefreshData()
 
     if (self.BalanceFrame ~= nil) then
         BalanceList:SearchEntries(self.BalanceFrame.SearchBox:GetText())
-        local AccountBalance = 0
+        local AccountTotalBalance = 0
+        local WarbandBalance = BalanceList:GetWarbandMoney()
+        
         for _, CharBalanceInfo in pairs(self.GlobalSettings.BalanceList) do
-            --if (SalesTools:FormatRawCurrency(CharBalanceInfo["Personal"]) >= 1) then
-                AccountBalance = AccountBalance + CharBalanceInfo["Personal"]
-
-            --end
-
-
+            AccountTotalBalance = AccountTotalBalance + CharBalanceInfo["Personal"]
         end
-        AccountBalance = BalanceList:MoneyFormat(AccountBalance)
-        self.BalanceFrame.GoldLabel:SetText(string.format(L["BalanceList_AccountBalance"],string.char(10),AccountBalance))
+        
+        local formattedTotalCombined
+        local formattedWarbandBalance
 
+        local TotalBalanceCombined = AccountTotalBalance
+        
+        -- Check if WarbandBalance is a number (meaning access was granted/available)
+        if type(WarbandBalance) == 'number' then
+            -- Calculate Total Account Balance (Character Sum + Warband)
+            TotalBalanceCombined = AccountTotalBalance + WarbandBalance
+            
+            -- Format the balances
+            formattedWarbandBalance = BalanceList:MoneyFormat(WarbandBalance)
+            
+            -- Format the combined balance
+            formattedTotalCombined = BalanceList:MoneyFormat(TotalBalanceCombined)
+
+            combinedText = string.format(
+                ACCOUNT_BALANCE_STRING_FORMAT .. string.char(10) .. WARBAND_BALANCE_STRING,
+                formattedTotalCombined,
+                formattedWarbandBalance
+            )
+        else
+            -- WarbandBalance is "No Access" (string), do not add it to total
+            
+            -- Format the character sum balance
+            formattedTotalCombined = BalanceList:MoneyFormat(AccountTotalBalance)
+            
+            -- Display No Access for Warband
+            combinedText = string.format(
+                ACCOUNT_BALANCE_STRING_FORMAT .. string.char(10) .. WARBAND_BALANCE_STRING,
+                formattedTotalCombined,
+                NO_ACCESS_TEXT
+            )
+        end
+
+        -- Update the label
+        self.BalanceFrame.GoldLabel:SetText(combinedText)
     end
 end
 
-function BalanceList:UpdateGold()
-    -- Handler for PLAYER_MONEY events
+function BalanceList:GetWarbandMoney()
+    -- New function to get Warband Bank gold
+    SalesTools:Debug("BalanceList:GetWarbandMoney")
+    if C_Bank and Enum and Enum.BankType and Enum.BankType.Account then
+        -- C_Bank.FetchDepositedMoney returns the amount in copper or nil if access is denied/unavailable.
+        local money = C_Bank.FetchDepositedMoney(Enum.BankType.Account)
+        if money ~= nil then
+            return money
+        else
+            return NO_ACCESS_TEXT -- Return a non-number indicator for no access
+        end
+    end
+    return NO_ACCESS_TEXT -- Default to No Access if API C_Bank is unavailable
+end
+
+function BalanceList:UpdateWarbandGold(event, ...)
+    -- Handler for ACCOUNT_MONEY events
+    SalesTools:Debug("BalanceList:UpdateWarbandGold")
+    self:RefreshData()
+end
+
+function BalanceList:UpdateGold(event, ...)
+    -- Handler for PLAYER_MONEY, GUILD_ROSTER_UPDATE, etc. events
     SalesTools:Debug("BalanceList:UpdateGold")
+
+-- Store Warband Gold separately (it's account-wide, not character-specific)
+    local wgold_val = BalanceList:GetWarbandMoney()
+    self.GlobalSettings.WarbandGold = wgold_val -- Stores the number or the NO_ACCESS_TEXT
 
     if (UnitFullName("player") ~= nil) then
         local faction, _ = UnitFactionGroup("player")
@@ -418,27 +585,54 @@ function BalanceList:UpdateGold()
         local pgold = GetMoney()
         local realm = GetRealmName()
         
-        local ggold = 0
-        local gname = "No Guild"
+        -- FIX: Fetch existing data to prevent temporary overwriting of guild name/gold
+        local existingData = self.GlobalSettings.BalanceList[player] or {}
+        local ggold = existingData["Guild"] or 0
+        local gname_internal = existingData["GuildName"] or "No Guild"
         
-        if (IsInGuild() and (C_GuildInfo.IsGuildOfficer() or IsGuildLeader())) then
-            local GuildName, _, _, _ = GetGuildInfo("player")
-
-            if LGBC:GetGuildFunds() ~= nil then
-                ggold = LGBC:GetGuildFunds()
+        -- Remove brackets for internal processing (since stored name might contain them)
+        gname_internal = gname_internal:gsub('<', ''):gsub('>', '')
+        
+        local currentGuildName, _, _, _, _, _, _, _, _, IsGuildLoaded = GetGuildInfo("player")
+        
+        -- CHECK MEMBERSHIP & UPDATE
+        if (IsInGuild()) then
+            -- We are in a guild. If GetGuildInfo provides a valid name, update it.
+            if currentGuildName and currentGuildName ~= "" then
+                gname_internal = currentGuildName
+                
+                -- CHECK FUNDS: Only try to get funds if permission is granted (officer/leader)
+                if (C_GuildInfo.IsGuildOfficer() or IsGuildLeader()) then
+                    if LGBC:GetGuildFunds() ~= nil then
+                        ggold = LGBC:GetGuildFunds()
+                    end
+                end
             end
-            
-            if GuildName ~= nil then
-                gname = GuildName
-            end
+            -- If currentGuildName is nil/empty (due to delayed loading), we keep the gname_internal
+            -- initialized from existingData, preventing the overwrite to "No Guild".
+        else
+            -- If not in a guild, explicitly reset
+            gname_internal = "No Guild"
+            ggold = 0
         end
+        
+        -- Store guild name wrapped in <>, similar to how "No Guild" was previously formatted
+        local gname_stored
+        if gname_internal ~= "No Guild" then
+            gname_stored = "<" .. gname_internal .. ">"
+        else
+            gname_stored = "<No Guild>"
+        end
+
 
         self.GlobalSettings.BalanceList[player] = {
             ["Personal"] = pgold,
             ["Faction"] = faction,
             ["Guild"] = ggold,
-            ["GuildName"] = "<" .. gname .. ">",
-            ["Realm"] = realm:gsub(' ','')
+            ["GuildName"] = gname_stored, -- Use the bracketed name for storage
+            ["Realm"] = realm:gsub(' ',''),
+            ["LastUpdated"] = time(), -- ADD CURRENT TIMESTAMP
+            ["PlayerName"] = player, -- Store the full name for easy lookup
         }
 
         BalanceList:RefreshData()
@@ -460,17 +654,19 @@ function BalanceList:MoneyFormat(money, excludeCopper)
     local silverColor = '|cff7b7b7a';
     local copperColor = '|cffac7248';
 
-    local gold = SalesTools:FormatRawCurrency(money);
-    local silver = floor((money - (gold * COPPER_PER_GOLD)) / COPPER_PER_SILVER);
-    local copper = floor(money % COPPER_PER_SILVER);
+    -- FIX: Calculate rawGold directly for accurate comma separation
+    local rawGold = floor(money / 10000);  -- 10000 is COPPER_PER_GOLD
+    local silver = floor((money - (rawGold * 10000)) / 100); -- 100 is COPPER_PER_SILVER
+    local copper = floor(money % 100); -- 100 is COPPER_PER_SILVER
 
     local output = '';
 
-    if gold > 0 then
-        output = format('%s%s%s ', goldColor, SalesTools:CommaValue(gold), '|rg');
+    if rawGold > 0 then
+        -- FIX: Use rawGold (the whole number of gold) for comma formatting
+        output = format('%s%s%s ', goldColor, SalesTools:CommaValue(rawGold), '|rg');
     end
 
-    if gold > 0 or silver > 0 then
+    if rawGold > 0 or silver > 0 then
         output = format('%s%s%02i%s ', output, silverColor, silver, '|rs');
     end
 
