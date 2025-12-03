@@ -4,4 +4,8 @@
     <Script file="esMX.lua"/>
     <Script file="esES.lua"/>
     <Script file="ptBR.lua"/>
+    <Script file="ruRU.lua"/>
+    <Script file="koKR.lua"/>
+    <Script file="zhTW.lua"/>
+    <Script file="zhCN.lua"/>
 </Ui>
