@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.2.7] - 2025-12-04
+**Interface Update:** World of Warcraft Retail 11.2.7
+
+### New Features & Major Changes
+
+#### Warband Gold Tracking Overhaul
+* **Added Warband Bank Gold** tracking and inclusion in the total **Battle.net Account Balance** calculation.
+* The **Balance List** now defaults to sorting by **"Last Updated" (Newest First)**.
+* Added a **Warband Gold Copy Button** to the `/sales help` info plate.
+    * The button is dynamically disabled/greyed out if the Warband Gold amount is zero.
+
+#### Balance List (Data & UI)
+* Introduced a new **"Last Updated"** column, displaying time in **relative format** (e.g., "5 min ago") instead of raw date strings.
+* Gold amounts across the UI (Balance List, Collector Menu) are now correctly displayed with **comma separators** (e.g., `1,234,567g`).
+* Fixed a bug preventing the correct retrieval and display of a character's **Guild Name** for standard guild members.
+
+#### User Interface & Consistency
+* Standardized default and maximum dimensions for **Balance List, Mail Log, and Trade Log** viewer windows to **1400w x 720h**.
+* The `/sales help` Info Plate now separates the **Realm Name** and **Faction Name** onto two lines, with the Faction using the official Alliance/Horde color.
+* Simplified all gold display labels from the localized word **"Gold"** to the abbreviation **`"g"`** (e.g., `100,000g`).
+
+#### Core & Localization (L10N)
+* **Massive Localization Update:** Added support for **Russian (`ruRU`)**, **Korean (`koKR`)**, **Traditional Chinese (`zhTW`)**, and **Simplified Chinese (`zhCN`)**.
+    * Fixed duplicate startup banner printing; it now displays only once.
+* **Menu Button Renames:**
+    * `"Mass Whisper"` is now `"Version Info"`.
+    * `"Mass Invite"` is now `"Info Panel"` (opens `/sales help`).
+    * `"Request Inv"` is now `"Close Menu"`.
+* **Stability:** Implemented robust nil-checks and safety fallbacks (especially for missing data and localization keys) to prevent various Lua crashes and errors (`attempt to compare number with nil`, "Missing entry").
+
 ## [1.2.0] — 2025‑08‑10
 **Maintainer:** Osiris the Kiwi (Discord: osirisnz)  
 **Previous contributors:** Adalyia‑Illidan, Volthemar‑Dalaran, Honorax‑Illidan
