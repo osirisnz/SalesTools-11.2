@@ -1,4 +1,4 @@
-## 🚀 SalesTools (Retail 11.2 Compatible)
+## 🚀 SalesTools (Retail 11.2.7 Compatible)
 
 **Author / Maintainer:** Updated for patch 11.2.7 by **Osiris the Kiwi 🥝** (Discord: `osirisnz`)
 **Original Authors & Contributors:** Adalyia-Illidan, Volthemar-Dalaran, Honorax-Illidan
