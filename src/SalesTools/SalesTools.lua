@@ -3,7 +3,7 @@
     Desc: An addon with several useful Quality of Life features for the advertisement & administration of in-game gold sales
     Repo: https://github.com/Adalyia/SalesTools
     Author(s): 
-    - Updated for 11.2 by Osiris the Kiwi / Discord: osirisnz
+    - Updated for 11.2.7 by Osiris the Kiwi / Discord: osirisnz
     - Emily Cohen / Emilýp-Illidan / adalyiawra@gmail.com
     - Honorax-Illidan - https://worldofwarcraft.com/en-us/character/us/illidan/honorax (Original author, this addon is largely based on his idea/work)
     - David Martínez / Volthemar-Dalaran / damaartinezgo@gmail.com
@@ -12,7 +12,6 @@
 --[[
     TODO:
     - Possible refactor/rename back to AdTools
-    - Localisation for ruRU, zhCN, zhTW, etc.
     - Drop the StdUi dependency (this lib doesn't seem to be actively maintained/developed at the moment)
     - Make the mail event code less janky (pls make this easier blizzard)
     - Separate modules into different addons (e.g. SalesTools_Mail, SalesTools_Log, SalesTools_Config, etc.) (this idea might be scrapped)
@@ -192,9 +191,9 @@ function SalesTools:OnInitialize()
     
         -- If we find no valid commands, output the commands list
         if (not found) then
-            self:Print("Commands:")
+            self:Print(L["SalesTools_Commands_Title"])
             for key, value in pairs(SalesTools.AddonCommands) do
-                DEFAULT_CHAT_FRAME:AddMessage("   /" .. "|cffd4af37" .. ADDON_COMMAND1 .. "|r" .. " |cff00FF17" .. key .. " |r- |cff00F7FF" .. value.desc)
+                DEFAULT_CHAT_FRAME:AddMessage("   /" .. "|cffd4af37" .. ADDON_COMMAND1 .. "|r" .. " |cff00FF17" .. key .. " |r" .. L["SalesTools_Command_Separator"] .. "|cff00F7FF" .. value.desc)
             end
         
         end
@@ -207,7 +206,7 @@ function SalesTools:OnInitialize()
     self:RegisterChatCommand(ADDON_COMMAND4, OnCommand)
 
     -- Print version information
-    local _ver=C_AddOns.GetAddOnMetadata("SalesTools","Version"); self:Print(string.format("Version %s updated for patch 11.2 by Osiris the Kiwi", _ver))
+    local _ver=C_AddOns.GetAddOnMetadata("SalesTools","Version"); self:Print(string.format(L["SalesTools_Version_Update_Msg"], _ver))
 end
 
 function SalesTools:OnEnable()
@@ -302,10 +301,14 @@ end
 
 -- GUI Elements
 
-
-
 -- Toggle the version/info panel
 function SalesTools:ToggleInfoPanel()
+    if (self.InfoPanel and self.InfoPanel:IsShown()) then
+        self.InfoPanel:Hide()
+    else
+        self:AddonInfoPanel()
+    end
+end
 
 -- Toggle the help/info plate panel
 function SalesTools:ToggleHelpPanel()
@@ -319,25 +322,18 @@ function SalesTools:ToggleHelpPanel()
 end
 
 
-    if (self.InfoPanel and self.InfoPanel:IsShown()) then
-        self.InfoPanel:Hide()
-    else
-        self:AddonInfoPanel()
-    end
-end
-
 function SalesTools:AddonInfoPanel()
     -- Called to draw/display the addon's information panel
-    self:Debug("AddonInfoPanel")
+    SalesTools:Debug("AddonInfoPanel")
 
     if (self.InfoPanel) then
         self.InfoPanel:Show()
     else
-        local window = StdUi:Window(UIParent, 360, 200, L["Addon_Name"])
+        local window = StdUi:Window(UIParent, 360, 250, L["Addon_Name"])
         window:SetPoint('CENTER', UIParent, 'CENTER', 0, 0)
         if window.closeBtn then window.closeBtn:Show() end
         if window.closeBtn then window.closeBtn:Show() end
-        window:SetMovable(false);
+        window:SetMovable(true); -- FIX: Changed from 'false' to 'true'
         window:EnableMouse(true);
 
         local addonVersion = StdUi:Label(window, '|cffFFE400' .. C_AddOns.GetAddOnMetadata("SalesTools", "Version") .. '|r', 17, nil, 160);
@@ -345,19 +341,20 @@ function SalesTools:AddonInfoPanel()
         StdUi:GlueTop(addonVersion, window, 0, -40);
 
         local authorText = table.concat({
-    '|cffffd100Version ' .. C_AddOns.GetAddOnMetadata("SalesTools","Version") .. ' updated for patch 11.2 by Osiris the Kiwi|r',
-    '|cff00FF17Discord: osirisnz|r',
+    string.format(L["SalesTools_InfoPanel_Version_Line"], C_AddOns.GetAddOnMetadata("SalesTools","Version")),
+    L["SalesTools_InfoPanel_Discord_Line"],
     '',
-    '|cffffd100Previous authors and contributors|r',
-    '|cff00FF17Adalyia-Illidan|r',
-    '|cff00FF17Volthemar-Dalaran|r',
-    '|cff00FF17Honorax-Illidan|r',
+    L["SalesTools_InfoPanel_Previous_Authors"],
+    L["SalesTools_InfoPanel_Author_Adalyia"],
+    L["SalesTools_InfoPanel_Author_Volthemar"],
+    L["SalesTools_InfoPanel_Author_Honorax"],
 }, string.char(10))
 
 local addonAuthor = StdUi:Label(window, authorText, 13, nil, 300);
 addonAuthor:SetJustifyH('CENTER');
 StdUi:GlueBelow(addonAuthor, addonVersion, 0, -10);
-local addonNotes = StdUi:Label(window, '|cff00F7FF' .. C_AddOns.GetAddOnMetadata("SalesTools", "Notes") .. '|r', 13, nil, 300);
+-- FIX: Use the localized L["Description"] key instead of the TOC's hardcoded "Notes" field
+local addonNotes = StdUi:Label(window, '|cff00F7FF' .. L["Description"] .. '|r', 13, nil, 300); 
         addonNotes:SetJustifyH('CENTER');
         StdUi:GlueBelow(addonNotes, addonAuthor, 0, -15);
 
@@ -373,7 +370,7 @@ function SalesTools:DrawMailboxButtons()
         local icon_texture = StdUi:Texture(AddonIconFrame, 32, 32, SalesTools.AddonIcon)
         StdUi:GlueTop(icon_texture, AddonIconFrame, 0, 0)
 
-        local MailLogButton = StdUi:Button(MailFrame, 150, 22, "Mail Log")
+        local MailLogButton = StdUi:Button(MailFrame, 150, 22, L["MailLog_Button_Text"])
         MailLogButton:SetScript("OnClick", function()
             if (SalesTools.MailLog) then
                 SalesTools.MailLog:Toggle()
@@ -383,7 +380,7 @@ function SalesTools:DrawMailboxButtons()
         StdUi:GlueBottom(MailLogButton, MailFrame, 20, -22, "RIGHT")
         StdUi:GlueLeft(AddonIconFrame, MailLogButton, 0, -11)
 
-        local SendMailButton = StdUi:Button(MailFrame, 150, 22, "Mail Gold")
+        local SendMailButton = StdUi:Button(MailFrame, 150, 22, L["MailSender_Button_Text"])
         SendMailButton:SetScript("OnClick", function()
             if (SalesTools.MailSender) then
                 SalesTools.MailSender:Toggle()
@@ -398,7 +395,7 @@ function SalesTools:DrawMailboxButtons()
         
         
         if (self.MailPickupButton == nil and self.MailGrabber ~= nil) then
-            local MailPickupButton = StdUi:Button(MailFrame, 150, 22, "Mail Pickup")
+            local MailPickupButton = StdUi:Button(MailFrame, 150, 22, L["MailGrabber_Button_Text"])
             MailPickupButton:SetScript("OnClick", function()
                 if (SalesTools.MailGrabber) then
                     SalesTools.MailGrabber:Toggle()
@@ -501,9 +498,20 @@ end
 -- === Unified copy helpers ===
 function SalesTools:Copy(value, title)
     self:Debug("Copy")
+    
+    local valueString = tostring(value or "")
+    local copiedAutomatically = false
+
+    -- Check if we can use the modern SetClipboard function (Attempt #1: Automatic Copy)
+    if SetClipboard then
+        -- This line is executed immediately on initial button click
+        SetClipboard(valueString)
+        copiedAutomatically = true
+    end
+
     if not StaticPopupDialogs["SalesToolsPopup"] then
         StaticPopupDialogs["SalesToolsPopup"] = {
-            text = "Copy",
+            text = L["SalesTools_Popup_Title"],
             button1 = OKAY,
             timeout = 10,
             whileDead = true,
@@ -511,18 +519,36 @@ function SalesTools:Copy(value, title)
             exclusive = true,
             enterClicksFirstButton = true,
             preferredIndex = 3,
-            hasEditBox = true,
+            hasEditBox = true, 
+            -- REMOVED THE FAULTY 'func' HERE. "Okay" now only closes the window.
         }
     end
-    local dialog = StaticPopup_Show("SalesToolsPopup", nil, nil, { text = tostring(value or "") })
+    local dialog = StaticPopup_Show("SalesToolsPopup", nil, nil, { text = valueString })
     if not dialog then return end
-    if title and dialog.Text and dialog.Text.SetText then dialog.Text:SetText(tostring(title)) end
+    
+    -- Update the title of the popup
+    if title and dialog.Text and dialog.Text.SetText then 
+        dialog.Text:SetText(tostring(title)) 
+    end
+    
     local eb = dialog.EditBox or dialog.editBox
     if eb then
-        eb:SetText(tostring(value or ""))
-        eb:HighlightText(0, -1)
-        eb:SetFocus()
+        eb:SetText(valueString)
+        
+        if not copiedAutomatically then
+            -- Attempt #2 (Manual Copy Setup): If SetClipboard failed, force the highlight and focus.
+            eb:HighlightText(0, -1) -- Selects all text
+            eb:SetFocus()          -- Gives the edit box focus for Ctrl+C
+        else
+            -- If it was copied automatically, we still need to clear the highlight/focus 
+            -- so the user isn't stuck typing in the dialog box.
+            eb:HighlightText(0, 0)
+            eb:SetFocus(false)
+        end
+        
         eb:SetCursorPosition(0)
+        
+        -- Keep scripts to close the dialog on key press
         eb:SetScript("OnEnterPressed", function() dialog:Hide() end)
         eb:SetScript("OnTabPressed", function() dialog:Hide() end)
         eb:SetScript("OnSpacePressed", function() dialog:Hide() end)
@@ -530,10 +556,10 @@ function SalesTools:Copy(value, title)
 end
 
 function SalesTools:ShowPopup(text, title)
-    self:Copy(text, title or "Copy")
+    self:Copy(text, title or L["SalesTools_Popup_Title"])
 end
 StaticPopupDialogs["SalesToolsPopup"] = {
-    text = "Copy",
+    text = L["SalesTools_Popup_Title"],
     button1 = OKAY,
     timeout = 10,
     whileDead = true,
@@ -544,47 +570,12 @@ StaticPopupDialogs["SalesToolsPopup"] = {
     hasEditBox = true,
 }
 
---[[
-Robust startup banner: prints once per load (login or /reload) after chat is ready,
-avoiding duplicate prints across PLAYER_LOGIN / PLAYER_ENTERING_WORLD / ADDON_LOADED.
-]]
-if not SalesToolsStartupFrame then
-    local f = CreateFrame("Frame")
-    SalesToolsStartupFrame = f
-    f.printed = false
-    f:RegisterEvent("ADDON_LOADED")
-    f:RegisterEvent("PLAYER_LOGIN")
-    f:RegisterEvent("PLAYER_ENTERING_WORLD")
-    f:SetScript("OnEvent", function(self, event, ...)
-        if event == "ADDON_LOADED" then
-            local name = ...
-            if name ~= "SalesTools" then return end
-        end
-        if self.printed then return end
-        self.printed = true
 
-        local ver = "?"
-        if C_AddOns and C_AddOns.GetAddOnMetadata then
-            ver = C_AddOns.GetAddOnMetadata("SalesTools", "Version") or "?"
-        elseif GetAddOnMetadata then
-            ver = GetAddOnMetadata("SalesTools", "Version") or "?"
-        end
+-- === Collector Menu Buttons (Needs to be at the end to ensure L is fully populated) ===
+L["CollectorMenu_CloseMenu_Button"] = L["CollectorMenu_CloseMenu_Button_Text"]
+L["CollectorMenu_InfoPanel_Button"] = L["CollectorMenu_InfoPanel_Button_Text"]
+L["CollectorMenu_VersionInfo_Button"] = L["CollectorMenu_VersionInfo_Button_Text"]
 
-        if C_Timer and C_Timer.After then
-            C_Timer.After(0.1, function()
-                if SalesTools and SalesTools.Print then
-                    SalesTools:Print(string.format("Version %s updated for patch 11.2 by Osiris the Kiwi", ver))
-                else
-                    print("|cff33ff99[SalesTools]|r Version " .. ver .. " updated for patch 11.2 by Osiris the Kiwi")
-                end
-            end)
-        else
-            if SalesTools and SalesTools.Print then
-                SalesTools:Print(string.format("Version %s updated for patch 11.2 by Osiris the Kiwi", ver))
-            else
-                print("|cff33ff99[SalesTools]|r Version " .. ver .. " updated for patch 11.2 by Osiris the Kiwi")
-            end
-        end
-    end)
-end
-
+-- TEMPORARY FALLBACK FOR OLD/EXTERNAL REFERENCES:
+L["CollectorMenu_MassWhisper_Button"] = L["CollectorMenu_VersionInfo_Button_Text"] 
+-- REMOVED THE FOLLOWING LINE THAT CAUSED THE ERROR: L["TradeLog_Window_Title"] = L["TradeLog_Window_Title"] or "Trade Log Viewer"
